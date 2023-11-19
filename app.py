@@ -22,7 +22,7 @@ import tempfile
 dotenv.load_dotenv()
 
 # Page selection
-page_options = ['LinkedIn Profile Optimizer', 'Resume Optimizer']
+page_options = ['LinkedIn Profile Optimizer', 'Linkedin Optimizer']
 selected_page = st.sidebar.radio('Select Page', page_options)
 
 if selected_page == 'LinkedIn Profile Optimizer':
@@ -105,56 +105,42 @@ if selected_page == 'LinkedIn Profile Optimizer':
         except Exception as e:
             st.write('ERROR: Unable to run LinkedIn Profile Optimizer, error - %s' % (e))
 
-elif selected_page == 'Resume Optimizer':
-    st.title("Resume Optimizer")
-    link_input = st.text_input(label="Link here")
+elif selected_page == 'Linkedin Optimizer':
+    st.title("Profile Optimizer")
     resume_uploader = st.file_uploader(label="Resume here")
+    about = st.text_input("About here")
     submit_button = st.button(label="Submit")
 
     if submit_button:
-        if link_input:
-            pass
-        elif resume_uploader:
-            # Resume Optimizer code here...
-            # ...
-            if submit_button:
-                    if link_input:
-                        pass
-                    elif resume_uploader:
+        if resume_uploader:
+            try:
+                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    temp_file.write(resume_uploader.read())
+                    temp_filename = temp_file.name
 
-                        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                            temp_file.write(resume_uploader.read())
-                            temp_filename = temp_file.name
+                pdf_loader = PyPDFLoader(temp_filename)
+                data = pdf_loader.load()
 
+                text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+                texts = text_splitter.split_documents(data)
 
-                        pdf_loader = PyPDFLoader(temp_filename)
-                        data = pdf_loader.load()
+                embeddings = OpenAIEmbeddings(openai_api_key='')
 
+                pinecone.init(api_key='', environment='')
+                index_name = "demo"
+                index = Pinecone.from_documents(texts, embeddings, index_name=index_name)
+                retriever = index.as_retriever()
 
-                        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-                        texts = text_splitter.split_documents(data)
+                llm = ChatOpenAI(model_name='gpt-3.5-turbo', temperature=0, openai_api_key='')
+                memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+                chain = ConversationalRetrievalChain.from_llm(llm, retriever=retriever, memory=memory)
 
+                query = f'Generate an about section for my LinkedIn profile. Use my Resume section for reference. Heres my about section {about}'
+                result = chain.run({'question': query})
+                print(result)
+                st.write("Optimized About Section:", result)
 
-                        # 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
-                        embeddings = OpenAIEmbeddings(openai_api_key='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')
+                os.remove(temp_filename)
 
-
-                        pinecone.init(api_key='de9bbda2-885e-4e04-9db9-15eaed77b3cc', environment='gcp-starter')
-                        index_name = "demo"
-                        index = Pinecone.from_documents(texts, embeddings, index_name=index_name)
-                        retriever = index.as_retriever()
-
-
-                        llm = ChatOpenAI(model_name='gpt-3.5-turbo', temperature=0, openai_api_key = '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')
-                        memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-                        chain = ConversationalRetrievalChain.from_llm(llm, retriever=retriever, memory=memory)
-
-
-                        query = 'Generate an about section for my linkedin profile'
-                        result = chain.run({'question': query})
-                        print(result)
-
-                        st.write("Optimized Headline:", result)
-
-
-                        os.remove(temp_filename)
+            except Exception as e:
+                st.write(f'ERROR: Unable to run Profile Optimizer, error - {e}')
